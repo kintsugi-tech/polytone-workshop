@@ -1,0 +1,35 @@
+# This is a TOML config file.
+# For more information, see https://github.com/toml-lang/toml
+
+###############################################################################
+###                           Client Configuration                          ###
+###############################################################################
+
+# The network chain ID
+chain-id = "localjuno-1"
+# The keyring's backend, where the keys are stored (os|file|kwallet|pass|test|memory)
+keyring-backend = "test"
+# CLI output format (text|json)
+output = "text"
+# <host>:<port> to Tendermint RPC interface for this chain
+node = "tcp://127.0.0.1:26057"
+# Transaction broadcasting mode (sync|async|block)
+broadcast-mode = "sync"
+
+###############################################################################
+###                          Juno Tx Configuration                          ###
+###############################################################################
+
+# Amount of gas per transaction
+gas = "auto"
+# Price per unit of gas (ex: 0.005ujuno)
+gas-prices = "0.01ujunox"
+gas-adjustment = "2"
+
+# Fees to use instead of set gas prices
+fees = ""
+fee-granter = ""
+fee-payer = ""
+
+# Memo to include in your Transactions
+note = ""
