@@ -10,4 +10,4 @@ Index:
 - [Setup Relayer](./4-relayer.md)
 - [Test callback](./5-test-callback.md)
 - [Create a custom contract](./6-custom-contract.md)
-- [Test the custom contract](./7-test-contract.md)
+- [Test the custom contract](./7-test-the-contract.md)
