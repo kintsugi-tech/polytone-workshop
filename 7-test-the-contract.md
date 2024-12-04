@@ -26,7 +26,7 @@ junod-docker tx wasm instantiate 3 '{"note_address": "juno14hj2tavq8fpesdwxxcu44
 
 make sure to use the correct note address, and the correct code id.
 
-## Delegate some tokens from acc2
+## Delegate some tokens from acc2
 
 To test the contract we need two accounts, one that has some ATOM staked and one that doesn't.
 
@@ -38,7 +38,7 @@ gaiad-docker tx staking delegate cosmosvaloper1zx0a35qhefzs8k6uvrry4ltqvnz5jcgwv
 
 make sure to replace the validator address with the correct one, that you can query with `gaiad-docker q staking validators`.
 
-## Execute increment from acc1
+## Execute increment from acc1
 
 First, let's check the current value for the counter:
 
@@ -64,7 +64,7 @@ data:
   count: 1
 ```
 
-## Execute increment from acc2
+## Execute increment from acc2
 
 We can try to do the same thing as before, but from acc2. The expected result is that the counter should not be incremented because acc2 doesn't have any ATOM staked.
 
