@@ -14,4 +14,7 @@ cd ~/polytone-workshop
 cargo generate --git https://github.com/CosmWasm/cw-template.git --name interchain_counter
 ```
 
+Select "minimal template" when asked.
+
+## Add our custom logic
 Let's build a real smart contract that does an interchain query and use the result in its logic [here](./6-custom-contract.md)
