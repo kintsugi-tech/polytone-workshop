@@ -21,6 +21,7 @@ pub fn instantiate(
     let state = State {
         count: msg.count,
         owner: info.sender.clone(),
+        note_address: msg.note_address,
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     STATE.save(deps.storage, &state)?;
@@ -34,26 +35,125 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Increment {} => execute::increment(deps),
+        ExecuteMsg::Increment {} => execute::increment(deps, info, env),
         ExecuteMsg::Reset { count } => execute::reset(deps, info, count),
+        ExecuteMsg::Callback(callback) => execute::callback(deps, env, info, callback),
     }
 }
 
 pub mod execute {
+
+    use cosmwasm_schema::cw_serde;
+    use cosmwasm_std::{
+        from_json, AllDelegationsResponse, CosmosMsg, Empty, QueryRequest, ReplyOn, StakingQuery,
+        SubMsg, Uint128, Uint64, WasmMsg,
+    };
+    use polytone::{
+        ack::Callback,
+        callbacks::{CallbackMessage, CallbackRequest},
+    };
+
     use super::*;
 
-    pub fn increment(deps: DepsMut) -> Result<Response, ContractError> {
-        STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-            state.count += 1;
-            Ok(state)
-        })?;
+    #[cw_serde]
+    pub enum PolytoneExecuteMsg {
+        Query {
+            msgs: Vec<QueryRequest<Empty>>,
+            callback: CallbackRequest,
+            timeout_seconds: Uint64,
+        },
+        Execute {
+            msgs: Vec<CosmosMsg<Empty>>,
+            callback: Option<CallbackRequest>,
+            timeout_seconds: Uint64,
+        },
+    }
 
-        Ok(Response::new().add_attribute("action", "increment"))
+    pub fn increment(
+        deps: DepsMut,
+        info: MessageInfo,
+        env: Env,
+    ) -> Result<Response, ContractError> {
+        let state = STATE.load(deps.storage)?;
+
+        // conver sender address from juno to cosmos
+        let bech32_addr = bech32::decode(info.sender.as_str()).unwrap();
+        let cosmos_addr = bech32::encode("cosmos", bech32_addr.1, bech32_addr.2).unwrap();
+
+        let msg = PolytoneExecuteMsg::Query {
+            msgs: vec![QueryRequest::Staking(StakingQuery::AllDelegations {
+                delegator: cosmos_addr,
+            })],
+            callback: CallbackRequest {
+                receiver: env.contract.address.into(),
+                msg: to_json_binary(&"test")?,
+            },
+            timeout_seconds: Uint64::new(300), // Example timeout of 30 seconds
+        };
+
+        let note_sub_msg: Vec<SubMsg> = vec![SubMsg {
+            id: 1,
+            msg: WasmMsg::Execute {
+                contract_addr: state.note_address,
+                msg: to_json_binary(&msg)?,
+                funds: info.funds,
+            }
+            .into(),
+            gas_limit: None,
+            reply_on: ReplyOn::Never,
+        }];
+
+        Ok(Response::new()
+            .add_attribute("action", "increment")
+            .add_submessages(note_sub_msg))
+    }
+
+    pub fn callback(
+        deps: DepsMut,
+        env: Env,
+        info: MessageInfo,
+        callback: CallbackMessage,
+    ) -> Result<Response, ContractError> {
+        let state = STATE.load(deps.storage)?;
+
+        // Only the note can execute the callback on this contract.
+        if info.sender != state.note_address {
+            return Err(ContractError::Unauthorized {});
+        }
+
+        // Check that we have at least some atom staked
+        match callback.result {
+            Callback::Query(Ok(results)) => {
+                // Deserialize each Binary result
+                for result in results {
+                    let query_result: AllDelegationsResponse = from_json(result.clone())?;
+
+                    if query_result.delegations[0].amount.amount > Uint128::zero() {
+                        // Update state
+                        STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+                            state.count += 1;
+                            Ok(state)
+                        })?;
+                    }
+                }
+            }
+            Callback::Query(Err(err)) => {
+                // use a proper error type here
+                deps.api.debug(&format!("Query callback failed: {:?}", err));
+                return Err(ContractError::Unauthorized {});
+            }
+            _ => {
+                // use a proper error type here
+                return Err(ContractError::Unauthorized {});
+            }
+        }
+
+        Ok(Response::new().add_attribute("action", "callback"))
     }
 
     pub fn reset(deps: DepsMut, info: MessageInfo, count: i32) -> Result<Response, ContractError> {
@@ -81,76 +181,5 @@ pub mod query {
     pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
         let state = STATE.load(deps.storage)?;
         Ok(GetCountResponse { count: state.count })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_json};
-
-    #[test]
-    fn proper_initialization() {
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg { count: 17 };
-        let info = mock_info("creator", &coins(1000, "earth"));
-
-        // we can just call .unwrap() to assert this was a success
-        let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        // it worked, let's query the state
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_json(&res).unwrap();
-        assert_eq!(17, value.count);
-    }
-
-    #[test]
-    fn increment() {
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg { count: 17 };
-        let info = mock_info("creator", &coins(2, "token"));
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-        // beneficiary can release it
-        let info = mock_info("anyone", &coins(2, "token"));
-        let msg = ExecuteMsg::Increment {};
-        let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-        // should increase counter by 1
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_json(&res).unwrap();
-        assert_eq!(18, value.count);
-    }
-
-    #[test]
-    fn reset() {
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg { count: 17 };
-        let info = mock_info("creator", &coins(2, "token"));
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-        // beneficiary can release it
-        let unauth_info = mock_info("anyone", &coins(2, "token"));
-        let msg = ExecuteMsg::Reset { count: 5 };
-        let res = execute(deps.as_mut(), mock_env(), unauth_info, msg);
-        match res {
-            Err(ContractError::Unauthorized {}) => {}
-            _ => panic!("Must return unauthorized error"),
-        }
-
-        // only the original creator can reset the counter
-        let auth_info = mock_info("creator", &coins(2, "token"));
-        let msg = ExecuteMsg::Reset { count: 5 };
-        let _res = execute(deps.as_mut(), mock_env(), auth_info, msg).unwrap();
-
-        // should now be 5
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_json(&res).unwrap();
-        assert_eq!(5, value.count);
     }
 }

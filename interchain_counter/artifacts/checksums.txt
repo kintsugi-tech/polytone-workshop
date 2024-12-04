@@ -1,1 +1,1 @@
-1ef2a32e141e97dd9b6e550feab80b1466e1798472bd7efcdb8d1b25d79a7736  interchain_counter.wasm
+731b15b009021e1ca691b2ce40af36d26f3f3b0085660a4228e75f62ad80cc46  interchain_counter.wasm
