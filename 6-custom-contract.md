@@ -183,4 +183,4 @@ this will generate the wasm contract binary in the `artifacts` folder.
 
 ### Next steps
 
-Test our contract! [here](./7-test-contract.md)
+Test our contract! [here](./7-test-the-contract.md)

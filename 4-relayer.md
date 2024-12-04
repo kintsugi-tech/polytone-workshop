@@ -12,7 +12,8 @@ You can copy it in your local hermes base directory with this command: `cp ${ICT
 
 You can validate the configuration by running `hermes config validate`
 
-### Setup realyer keys
+### Setup realyer keys
+
 To run a relayer we need to import the keys for both relayer accounts, you can do so using the following command:
 
 ```bash
@@ -20,7 +21,7 @@ hermes keys add --key-name relayer_key_chain1 --chain localjuno-1 --mnemonic-fil
 hermes keys add --key-name relayer_key_chain2 --chain localcosmoshub-1 --mnemonic-file ${ICTEST_HOME}/mnemonic2.txt
 ```
 
-### Create IBC connection and run relayer
+### Create IBC connection and run relayer
 
 Now that we have keys imported we can proceed creating a communication channel between the two chains
 
